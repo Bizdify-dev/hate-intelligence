@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #0a0a0a;
+    --bg-2: #111111;
+    --bg-3: #161616;
+    --ink: #f5f5f5;
+    --ink-dim: #a0a0a0;
+    --ink-mute: #6b6b6b;
+    --line: #242424;
+    --line-2: #2e2e2e;
+    --acid: #c6ff3d;
+    --acid-2: #a8e424;
+    --acid-glow: rgba(198, 255, 61, 0.2);
+    --red: #ff3b30;
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-inter), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: var(--acid);
+    color: #000;
+  }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 0; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-mute); }
+
+  *:focus-visible {
+    outline: 1px solid var(--acid);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply font-mono text-[11px] uppercase tracking-eyebrow text-ink-dim flex items-center gap-2.5;
+  }
+  .eyebrow-num {
+    @apply text-acid tracking-section text-[11px];
+  }
+
+  .btn {
+    @apply font-mono text-[11px] uppercase tracking-eyebrow font-medium
+           inline-flex items-center justify-center gap-2 px-4 py-2.5
+           rounded-[2px] transition-all duration-150 border border-transparent;
+  }
+  .btn-primary {
+    @apply bg-acid text-black font-semibold hover:bg-white hover:-translate-y-0.5;
+  }
+  .btn-primary:disabled {
+    @apply opacity-40 cursor-not-allowed translate-y-0 hover:bg-acid;
+  }
+  .btn-ghost {
+    @apply bg-transparent border-line-2 text-ink-dim hover:border-acid hover:text-acid hover:-translate-y-px;
+  }
+  .btn-danger {
+    @apply bg-transparent border-line-2 text-ink-dim hover:border-red hover:text-red;
+  }
+
+  .field-label {
+    @apply block font-mono text-[11px] uppercase tracking-eyebrow text-ink-dim mb-2;
+  }
+  .field-input {
+    @apply w-full bg-bg-3 border border-line-2 rounded-[2px] px-3.5 py-3
+           text-ink text-sm font-mono
+           focus:border-acid focus:outline-none transition-colors;
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--bg-2) 0%,
+      var(--bg-3) 50%,
+      var(--bg-2) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+}
