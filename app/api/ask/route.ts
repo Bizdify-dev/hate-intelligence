@@ -160,13 +160,7 @@ export async function POST(req: NextRequest) {
     const resp = await anthropic.messages.create({
       model: CLAUDE_MODEL,
       max_tokens: CLAUDE_MAX_TOKENS,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
+      system: SYSTEM_PROMPT,
       messages,
     });
 
