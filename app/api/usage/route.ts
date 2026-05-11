@@ -23,6 +23,7 @@ export async function GET() {
       .select("question_count")
       .eq("user_id", user.id)
       .eq("month", currentMonthKey())
+      .eq("product", "intelligence")
       .maybeSingle(),
   ]);
 
