@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
     .select("question_count")
     .eq("user_id", user.id)
     .eq("month", month)
+    .eq("product", "intelligence")
     .maybeSingle();
 
   const currentCount = usageRow?.question_count ?? 0;
@@ -133,9 +134,10 @@ export async function POST(req: NextRequest) {
       {
         user_id: user.id,
         month,
+        product: "intelligence",
         question_count: newCount,
       },
-      { onConflict: "user_id,month" }
+      { onConflict: "user_id,month,product" }
     );
   if (usageErr) {
     return NextResponse.json({ error: "usage_write_failed" }, { status: 500 });
