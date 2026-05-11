@@ -33,6 +33,7 @@ export default async function DashboardPage({
         .select("question_count")
         .eq("user_id", user.id)
         .eq("month", currentMonthKey())
+        .eq("product", "intelligence")
         .maybeSingle(),
     ]);
 
