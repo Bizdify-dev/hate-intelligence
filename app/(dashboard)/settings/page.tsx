@@ -24,6 +24,7 @@ export default async function SettingsPage() {
       .select("question_count")
       .eq("user_id", user.id)
       .eq("month", currentMonthKey())
+      .eq("product", "intelligence")
       .maybeSingle(),
   ]);
 
