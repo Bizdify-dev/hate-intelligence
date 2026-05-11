@@ -21,6 +21,8 @@ interface Props {
   planMaxChars: number;
 }
 
+const ACCEPTED_FILE_TYPES = ".pdf,.docx,.txt,.md,.markdown";
+
 export default function DocumentManager({
   documents,
   onChange,
@@ -29,6 +31,9 @@ export default function DocumentManager({
 }: Props) {
   const { toast } = useToast();
   const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [dragDepth, setDragDepth] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
@@ -41,13 +46,19 @@ export default function DocumentManager({
   const totalChars = documents.reduce((s, d) => s + (d.content?.length ?? 0), 0);
   const docCount = documents.length;
   const atLimit = planDocLimit > 0 && docCount >= planDocLimit;
+  const dragging = dragDepth > 0;
+  const busy = creating || uploading;
+
+  const limitToast = useCallback(() => {
+    toast({
+      kind: "warn",
+      message: `You've reached your plan's ${planDocLimit}-document limit. Upgrade for more.`,
+    });
+  }, [toast, planDocLimit]);
 
   const addDoc = useCallback(async () => {
     if (atLimit) {
-      toast({
-        kind: "warn",
-        message: `You've reached your plan's ${planDocLimit}-document limit. Upgrade for more.`,
-      });
+      limitToast();
       return;
     }
     setCreating(true);
@@ -66,7 +77,84 @@ export default function DocumentManager({
     } finally {
       setCreating(false);
     }
-  }, [atLimit, planDocLimit, documents, onChange, toast]);
+  }, [atLimit, limitToast, documents, onChange, toast]);
+
+  const uploadFile = useCallback(
+    async (file: File) => {
+      if (atLimit) {
+        limitToast();
+        return;
+      }
+      if (uploading) return;
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append("file", file);
+        const res = await fetch("/api/documents", { method: "POST", body: form });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || data.error || "Upload failed");
+        onChange([data.document, ...documents]);
+        toast({ kind: "success", message: `Uploaded "${data.document.title}"` });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Upload failed";
+        toast({ kind: "error", message });
+      } finally {
+        setUploading(false);
+      }
+    },
+    [atLimit, limitToast, uploading, documents, onChange, toast]
+  );
+
+  const onPickFile = useCallback(() => {
+    if (atLimit) {
+      limitToast();
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [atLimit, limitToast]);
+
+  const onFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) void uploadFile(file);
+      // Reset so picking the same file twice re-fires.
+      e.target.value = "";
+    },
+    [uploadFile]
+  );
+
+  const hasFiles = (e: React.DragEvent) =>
+    Array.from(e.dataTransfer.types).includes("Files");
+
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragDepth((d) => d + 1);
+  }, []);
+
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    setDragDepth((d) => Math.max(0, d - 1));
+  }, []);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = atLimit ? "none" : "copy";
+  }, [atLimit]);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      setDragDepth(0);
+      const file = e.dataTransfer.files?.[0];
+      if (!file) return;
+      void uploadFile(file);
+    },
+    [uploadFile]
+  );
 
   const updateDoc = useCallback(
     (id: string, patch: Partial<Pick<Doc, "title" | "content">>) => {
@@ -117,25 +205,57 @@ export default function DocumentManager({
   );
 
   return (
-    <>
+    <div
+      className="relative flex-1 flex flex-col min-h-0"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ACCEPTED_FILE_TYPES}
+        onChange={onFileInputChange}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+
       <header className="px-5 pt-4 pb-3 flex items-center justify-between border-b border-line flex-shrink-0">
         <div className="eyebrow">
           <span className="eyebrow-num">01</span>
           <span>/ DOCUMENTS</span>
         </div>
-        <button
-          onClick={addDoc}
-          disabled={creating || atLimit}
-          className="btn btn-ghost py-2 px-3 disabled:opacity-40"
-          title={atLimit ? "Plan limit reached" : "Add document"}
-        >
-          + Add Document
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onPickFile}
+            disabled={busy || atLimit}
+            className="btn btn-ghost py-2 px-3 disabled:opacity-40"
+            title={atLimit ? "Plan limit reached" : "Upload .pdf, .docx, .txt, or .md"}
+          >
+            {uploading ? "Uploading…" : "Upload file"}
+          </button>
+          <button
+            onClick={addDoc}
+            disabled={busy || atLimit}
+            className="btn btn-ghost py-2 px-3 disabled:opacity-40"
+            title={atLimit ? "Plan limit reached" : "Add document"}
+          >
+            + Add Document
+          </button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-5 min-h-0">
         {documents.length === 0 ? (
-          <EmptyState onAdd={addDoc} disabled={creating} />
+          <EmptyState
+            onAdd={addDoc}
+            onUpload={onPickFile}
+            disabled={busy}
+            atLimit={atLimit}
+            uploading={uploading}
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {documents.map((doc) => (
@@ -158,11 +278,53 @@ export default function DocumentManager({
         </span>
         <span>{totalChars.toLocaleString()} chars</span>
       </footer>
-    </>
+
+      {dragging && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center
+                     bg-bg/80 backdrop-blur-sm border-2 border-dashed border-acid rounded-[2px]"
+        >
+          <div className="flex flex-col items-center gap-3 px-6 py-5">
+            <div className="font-mono text-[11px] tracking-eyebrow uppercase text-acid">
+              {atLimit ? "Plan limit reached" : "Drop to upload"}
+            </div>
+            <div className="font-display font-bold text-2xl tracking-tighter text-ink text-center">
+              {atLimit ? "Upgrade for more documents" : ".pdf · .docx · .txt · .md"}
+            </div>
+            <div className="font-mono text-[11px] text-ink-mute uppercase tracking-eyebrow">
+              One file · max 10 MB
+            </div>
+          </div>
+        </div>
+      )}
+
+      {uploading && !dragging && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-12 flex justify-center">
+          <div className="pointer-events-auto border border-acid bg-bg-2 rounded-[2px] px-4 py-2
+                          font-mono text-[11px] uppercase tracking-eyebrow text-acid
+                          flex items-center gap-2 animate-slide-up">
+            <span className="inline-block w-2 h-2 bg-acid rounded-full animate-pulse" />
+            Extracting text…
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
-function EmptyState({ onAdd, disabled }: { onAdd: () => void; disabled: boolean }) {
+function EmptyState({
+  onAdd,
+  onUpload,
+  disabled,
+  atLimit,
+  uploading,
+}: {
+  onAdd: () => void;
+  onUpload: () => void;
+  disabled: boolean;
+  atLimit: boolean;
+  uploading: boolean;
+}) {
   return (
     <div className="flex flex-col items-center justify-center text-center gap-4 py-10 px-3 h-full min-h-[300px]">
       <div className="font-mono text-[11px] tracking-eyebrow uppercase text-acid">
@@ -175,12 +337,30 @@ function EmptyState({ onAdd, disabled }: { onAdd: () => void; disabled: boolean 
         Paste your SOPs, policies, FAQs or any internal doc.
         Ask questions. Get answers. No bullshit.
       </p>
+
       <button
         onClick={onAdd}
-        disabled={disabled}
+        disabled={disabled || atLimit}
         className="btn btn-primary mt-2"
       >
         + Add First Document
+      </button>
+
+      <button
+        type="button"
+        onClick={onUpload}
+        disabled={disabled || atLimit}
+        className="mt-2 w-full max-w-[340px] border-2 border-dashed border-line-2
+                   bg-bg-3 rounded-[2px] px-4 py-6 flex flex-col items-center gap-2
+                   transition-colors hover:border-acid hover:text-acid
+                   disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-line-2"
+      >
+        <span className="font-mono text-[11px] tracking-eyebrow uppercase text-acid">
+          {uploading ? "Uploading…" : "Or drop a file"}
+        </span>
+        <span className="font-mono text-[11px] text-ink-dim">
+          .pdf · .docx · .txt · .md · up to 10 MB
+        </span>
       </button>
     </div>
   );
