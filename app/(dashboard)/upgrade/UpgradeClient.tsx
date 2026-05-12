@@ -59,20 +59,20 @@ export default function UpgradeClient({
     ownProduct === "intelligence" ? "meetings" : "intelligence";
 
   const ownCards = prices.filter((p) => p.product === ownProduct);
-  const bundleCards = prices.filter((p) => p.product === "everything");
+  const everythingCards = prices.filter((p) => p.product === "everything");
   const otherCards = prices.filter((p) => p.product === otherProduct);
 
   const renderCard = (p: PriceCard) => {
     const key = `${p.product}:${p.tier}`;
-    // Bundle cards skip the isCurrent indicator in step 9: detecting whether
-    // the user is on the bundle (vs two standalone subs at the same tier)
-    // would require querying subscriptions.stripe_price_id directly.
+    // Everything cards skip the isCurrent indicator in step 9: detecting
+    // whether the user is on Everything (vs two standalone subs at the same
+    // tier) would require querying subscriptions.stripe_price_id directly.
     const isCurrent =
       (p.product === ownProduct && ownTier === p.tier) ||
       (p.product === otherProduct && otherTier === p.tier);
     const tierLabel = p.tier.charAt(0).toUpperCase() + p.tier.slice(1);
     const ctaLabel =
-      p.product === "everything" ? `Choose Bundle ${tierLabel}` : `Choose ${tierLabel}`;
+      p.product === "everything" ? `Choose Everything ${tierLabel}` : `Choose ${tierLabel}`;
     return (
       <PricingCard
         key={key}
@@ -98,11 +98,11 @@ export default function UpgradeClient({
         <div className="grid md:grid-cols-2 gap-4">{ownCards.map(renderCard)}</div>
       </section>
 
-      <section id="bundle">
+      <section id="everything">
         <div className="font-mono text-[11px] tracking-eyebrow uppercase text-acid mb-4">
-          EVERYTHING BUNDLE — BOTH PRODUCTS
+          EVERYTHING — BOTH PRODUCTS
         </div>
-        <div className="grid md:grid-cols-2 gap-4">{bundleCards.map(renderCard)}</div>
+        <div className="grid md:grid-cols-2 gap-4">{everythingCards.map(renderCard)}</div>
       </section>
 
       <section>

@@ -10,9 +10,9 @@ type Product = "intelligence" | "meetings" | "everything";
 type PlanTier = "starter" | "pro";
 
 // Map (product, tier) → env var name holding the Stripe price ID. The
-// "everything" product is the bundle whose Stripe price metadata grants
-// multiple product entitlements at checkout; env vars use the EVERYTHING
-// name to match step 3's wiring.
+// "everything" tier is a single Stripe price whose metadata grants multiple
+// product entitlements at checkout — there is no separate "bundle" concept
+// in our data model.
 const PRICE_ENV: Record<`${Product}:${PlanTier}`, string> = {
   "intelligence:starter": "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_STARTER",
   "intelligence:pro":     "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_PRO",

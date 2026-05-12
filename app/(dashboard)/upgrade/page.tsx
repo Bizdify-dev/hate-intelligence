@@ -121,14 +121,14 @@ export default async function UpgradePage() {
               YOU ALREADY HAVE {OTHER_PRODUCT_NAME.toUpperCase()}
             </div>
             <p className="text-sm text-ink leading-relaxed mb-3">
-              Save ~25% by switching to the Everything Bundle. You&apos;ll keep both
-              products and pay less.
+              Save ~25% by switching to Everything. You&apos;ll keep both products
+              and pay less.
             </p>
             <a
-              href="#bundle"
+              href="#everything"
               className="font-mono text-[11px] tracking-eyebrow uppercase text-acid hover:underline"
             >
-              See the bundle ↓
+              See Everything ↓
             </a>
           </div>
         )}

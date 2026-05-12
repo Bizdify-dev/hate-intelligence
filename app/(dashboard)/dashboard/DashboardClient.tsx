@@ -46,9 +46,9 @@ export default function DashboardClient(props: Props) {
     <>
       {props.hasOtherProduct && (
         <CrossSellToast
-          message="You already have HATE Meetings. Save ~25% by switching to the Everything Bundle."
+          message="You already have HATE Meetings. Save ~25% by switching to Everything."
           ctaHref="/upgrade"
-          ctaLabel="See bundle"
+          ctaLabel="See Everything"
           storageKey="cross_sell_toast_seen_meetings_v1"
         />
       )}
