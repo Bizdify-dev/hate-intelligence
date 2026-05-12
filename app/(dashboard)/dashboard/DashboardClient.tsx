@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import DocumentManager, { type Doc } from "@/components/DocumentManager";
 import ChatInterface from "@/components/ChatInterface";
 import UsageBar from "@/components/UsageBar";
+import CrossSellToast from "@/components/CrossSellToast";
 import { useToast } from "@/components/Toast";
 import type { PlanId } from "@/lib/plans";
 
@@ -16,6 +17,7 @@ interface Props {
   planMaxChars: number;
   initialUsage: number;
   subscriptionActive: boolean;
+  hasOtherProduct: boolean;
   upgraded: boolean;
 }
 
@@ -41,6 +43,15 @@ export default function DashboardClient(props: Props) {
   }
 
   return (
+    <>
+      {props.hasOtherProduct && (
+        <CrossSellToast
+          message="You already have HATE Meetings. Save ~25% by switching to the Everything Bundle."
+          ctaHref="/upgrade"
+          ctaLabel="See bundle"
+          storageKey="cross_sell_toast_seen_meetings_v1"
+        />
+      )}
     <div className="flex-1 grid grid-cols-1 md:grid-cols-[35%_65%] min-h-0 overflow-hidden">
       {/* LEFT — Document Manager */}
       <section className="flex flex-col min-h-0 border-r border-line bg-bg border-t-[3px] border-t-acid shadow-acid-glow overflow-hidden">
@@ -70,5 +81,6 @@ export default function DashboardClient(props: Props) {
         />
       </section>
     </div>
+    </>
   );
 }

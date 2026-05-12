@@ -18,7 +18,7 @@ export default async function DashboardPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: documents }, { data: usageRow }, entitlement] =
+  const [{ data: documents }, { data: usageRow }, entitlement, otherEntitlement] =
     await Promise.all([
       supabase
         .from("documents")
@@ -33,6 +33,7 @@ export default async function DashboardPage({
         .eq("product", "intelligence")
         .maybeSingle(),
       getEntitlement(user.id, "intelligence"),
+      getEntitlement(user.id, "meetings"),
     ]);
 
   const tier = entitlement
@@ -48,6 +49,7 @@ export default async function DashboardPage({
       planMaxChars={tier?.maxCharsPerDocument ?? 0}
       initialUsage={usageRow?.question_count ?? 0}
       subscriptionActive={!!entitlement}
+      hasOtherProduct={!!otherEntitlement}
       upgraded={searchParams.upgraded === "true"}
     />
   );

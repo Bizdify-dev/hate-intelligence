@@ -1,7 +1,15 @@
 /**
- * Single source of truth for plan limits, pricing display, and Stripe price IDs.
- * Edit here if you change the offering — every check in the app reads from this file.
+ * Display-layer plan data (name, monthly price, feature copy) for the
+ * Intelligence-only UI. Gate logic reads tier limits from PRODUCTS directly
+ * (see lib/products.ts) — the limit fields below are spread in from there
+ * so the two stay in sync.
+ *
+ * This file is on the way out: it still backs settings page display, the
+ * public landing page, and a few type imports. Slated for deletion once
+ * those consumers are migrated.
  */
+
+import { PRODUCTS } from "./products";
 
 export type PlanId = "free" | "starter" | "pro";
 
@@ -30,31 +38,27 @@ export const PLANS: Record<PlanId, Plan> = {
     id: "starter",
     name: "Starter",
     priceMonthly: 29,
-    questionsPerMonth: 300,
-    documentLimit: 10,
-    maxCharsPerDocument: 50_000,
+    ...PRODUCTS.intelligence.tiers.starter,
     features: [
       "300 questions per month",
       "Up to 10 documents",
       "50,000 chars per document",
       "Email support",
     ],
-    stripePriceIdEnv: "NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID",
+    stripePriceIdEnv: "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_STARTER",
   },
   pro: {
     id: "pro",
     name: "Pro",
     priceMonthly: 79,
-    questionsPerMonth: 1000,
-    documentLimit: -1,
-    maxCharsPerDocument: 100_000,
+    ...PRODUCTS.intelligence.tiers.pro,
     features: [
       "1,000 questions per month",
       "Unlimited documents",
       "100,000 chars per document",
       "Priority support",
     ],
-    stripePriceIdEnv: "NEXT_PUBLIC_STRIPE_PRO_PRICE_ID",
+    stripePriceIdEnv: "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_PRO",
   },
 };
 

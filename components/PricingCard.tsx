@@ -1,20 +1,26 @@
 "use client";
 
-import type { Plan } from "@/lib/plans";
-
 interface Props {
-  plan: Plan;
-  highlight?: boolean;
-  isCurrent?: boolean;
+  eyebrow: string;
+  priceMonthly: number;
+  features: string[];
+  ctaLabel: string;
   loading?: boolean;
+  isCurrent?: boolean;
+  highlight?: boolean;
+  badgeText?: string;
   onSelect?: () => void;
 }
 
 export default function PricingCard({
-  plan,
-  highlight = false,
-  isCurrent = false,
+  eyebrow,
+  priceMonthly,
+  features,
+  ctaLabel,
   loading = false,
+  isCurrent = false,
+  highlight = false,
+  badgeText = "POPULAR",
   onSelect,
 }: Props) {
   return (
@@ -24,21 +30,21 @@ export default function PricingCard({
     >
       {highlight && (
         <div className="absolute -top-3 left-8 bg-acid text-black font-mono text-[10px] tracking-section px-2 py-1 rounded-[2px]">
-          POPULAR
+          {badgeText}
         </div>
       )}
       <div className="font-mono text-[11px] tracking-eyebrow uppercase text-ink-dim mb-3">
-        {plan.name}
+        {eyebrow}
       </div>
       <div className="flex items-baseline gap-2 mb-6">
         <span className="font-display font-bold text-5xl tracking-tightest">
-          ${plan.priceMonthly}
+          ${priceMonthly}
         </span>
         <span className="text-ink-mute font-mono text-sm">/ month</span>
       </div>
 
       <ul className="space-y-3 mb-8">
-        {plan.features.map((f) => (
+        {features.map((f) => (
           <li key={f} className="flex items-start gap-3 text-sm text-ink">
             <span className="text-acid mt-0.5">→</span>
             <span>{f}</span>
@@ -56,7 +62,7 @@ export default function PricingCard({
           disabled={loading}
           className={`btn w-full ${highlight ? "btn-primary" : "btn-ghost"}`}
         >
-          {loading ? "Redirecting…" : `Choose ${plan.name}`}
+          {loading ? "Redirecting…" : ctaLabel}
         </button>
       )}
     </div>

@@ -2,10 +2,28 @@ import { NextResponse, type NextRequest } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PLANS, type PlanId } from "@/lib/plans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+type Product = "intelligence" | "meetings" | "everything";
+type PlanTier = "starter" | "pro";
+
+// Map (product, tier) → env var name holding the Stripe price ID. The
+// "everything" product is the bundle whose Stripe price metadata grants
+// multiple product entitlements at checkout; env vars use the EVERYTHING
+// name to match step 3's wiring.
+const PRICE_ENV: Record<`${Product}:${PlanTier}`, string> = {
+  "intelligence:starter": "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_STARTER",
+  "intelligence:pro":     "NEXT_PUBLIC_STRIPE_PRICE_INTELLIGENCE_PRO",
+  "meetings:starter":     "NEXT_PUBLIC_STRIPE_PRICE_MEETINGS_STARTER",
+  "meetings:pro":         "NEXT_PUBLIC_STRIPE_PRICE_MEETINGS_PRO",
+  "everything:starter":   "NEXT_PUBLIC_STRIPE_PRICE_EVERYTHING_STARTER",
+  "everything:pro":       "NEXT_PUBLIC_STRIPE_PRICE_EVERYTHING_PRO",
+};
+
+const VALID_PRODUCTS: readonly Product[] = ["intelligence", "meetings", "everything"];
+const VALID_TIERS: readonly PlanTier[] = ["starter", "pro"];
 
 export async function POST(req: NextRequest) {
   const supabase = createClient();
@@ -15,20 +33,29 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const planId = body?.plan as PlanId | undefined;
+  const product = body?.product as Product | undefined;
+  const plan = body?.plan as PlanTier | undefined;
 
-  if (!planId || !(planId in PLANS) || planId === "free") {
-    return NextResponse.json({ error: "invalid_plan" }, { status: 400 });
+  if (
+    !product ||
+    !VALID_PRODUCTS.includes(product) ||
+    !plan ||
+    !VALID_TIERS.includes(plan)
+  ) {
+    return NextResponse.json(
+      { error: "invalid_body", message: "Expected { product, plan }." },
+      { status: 400 }
+    );
   }
 
-  const priceId =
-    planId === "starter"
-      ? process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID
-      : process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID;
-
+  const envName = PRICE_ENV[`${product}:${plan}`];
+  const priceId = process.env[envName];
   if (!priceId) {
     return NextResponse.json(
-      { error: "missing_price_id", message: `Price ID for ${planId} is not configured.` },
+      {
+        error: "missing_price_id",
+        message: `${envName} is not configured.`,
+      },
       { status: 500 }
     );
   }
@@ -73,14 +100,15 @@ export async function POST(req: NextRequest) {
     success_url: `${appUrl}/dashboard?upgraded=true`,
     cancel_url: `${appUrl}/upgrade`,
     allow_promotion_codes: true,
+    // The webhook resolves user_id from subscription.metadata.supabase_user_id
+    // (set via subscription_data.metadata below). Entitlements come from the
+    // price's metadata.entitlements field, not from anything we put here.
     metadata: {
       supabase_user_id: user.id,
-      plan: planId,
     },
     subscription_data: {
       metadata: {
         supabase_user_id: user.id,
-        plan: planId,
       },
     },
   });
