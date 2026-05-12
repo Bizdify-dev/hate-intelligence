@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import DashboardClient from "./DashboardClient";
-import { getPlan, currentMonthKey } from "@/lib/plans";
+import { currentMonthKey } from "@/lib/plans";
+import { getEntitlement } from "@/lib/access";
+import { PRODUCTS } from "@/lib/products";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +18,8 @@ export default async function DashboardPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: documents }, { data: usageRow }] =
+  const [{ data: documents }, { data: usageRow }, entitlement] =
     await Promise.all([
-      supabase
-        .from("profiles")
-        .select("plan, subscription_status, email")
-        .eq("id", user.id)
-        .single(),
       supabase
         .from("documents")
         .select("id, title, content, created_at, updated_at")
@@ -35,20 +32,22 @@ export default async function DashboardPage({
         .eq("month", currentMonthKey())
         .eq("product", "intelligence")
         .maybeSingle(),
+      getEntitlement(user.id, "intelligence"),
     ]);
 
-  const plan = getPlan(profile?.plan);
-  const subActive = profile?.subscription_status === "active";
+  const tier = entitlement
+    ? PRODUCTS.intelligence.tiers[entitlement.plan_tier]
+    : null;
 
   return (
     <DashboardClient
       initialDocuments={documents ?? []}
-      planId={plan.id}
-      planLimit={plan.questionsPerMonth}
-      planDocLimit={plan.documentLimit}
-      planMaxChars={plan.maxCharsPerDocument}
+      planId={entitlement?.plan_tier ?? "free"}
+      planLimit={tier?.questionsPerMonth ?? 0}
+      planDocLimit={tier?.documentLimit ?? 0}
+      planMaxChars={tier?.maxCharsPerDocument ?? 0}
       initialUsage={usageRow?.question_count ?? 0}
-      subscriptionActive={subActive}
+      subscriptionActive={!!entitlement}
       upgraded={searchParams.upgraded === "true"}
     />
   );

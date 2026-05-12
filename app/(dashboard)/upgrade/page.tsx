@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PLANS } from "@/lib/plans";
+import { getEntitlement } from "@/lib/access";
 import UpgradeClient from "./UpgradeClient";
 
 export const dynamic = "force-dynamic";
@@ -13,14 +14,9 @@ export default async function UpgradePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("plan, subscription_status")
-    .eq("id", user.id)
-    .single();
-
-  const currentPlan = profile?.plan ?? "free";
-  const isActive = profile?.subscription_status === "active";
+  const entitlement = await getEntitlement(user.id, "intelligence");
+  const currentPlan = entitlement?.plan_tier ?? "free";
+  const isActive = !!entitlement;
 
   return (
     <div className="flex-1 overflow-y-auto">

@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { anthropic, CLAUDE_MODEL, CLAUDE_MAX_TOKENS, SYSTEM_PROMPT, buildUserMessage } from "@/lib/anthropic";
-import { getPlan, currentMonthKey } from "@/lib/plans";
+import { currentMonthKey } from "@/lib/plans";
+import { getEntitlement } from "@/lib/access";
+import { PRODUCTS } from "@/lib/products";
 import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -54,18 +56,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing_question" }, { status: 400 });
   }
 
-  // ----- Subscription check -----
-  const { data: profile, error: profileErr } = await supabase
-    .from("profiles")
-    .select("plan, subscription_status")
-    .eq("id", user.id)
-    .single();
-
-  if (profileErr || !profile) {
-    return NextResponse.json({ error: "profile_not_found" }, { status: 500 });
-  }
-
-  if (profile.subscription_status !== "active") {
+  // ----- Entitlement check -----
+  const entitlement = await getEntitlement(user.id, "intelligence");
+  if (!entitlement) {
     return NextResponse.json(
       {
         error: "subscription_required",
@@ -74,14 +67,7 @@ export async function POST(req: NextRequest) {
       { status: 403 }
     );
   }
-
-  const plan = getPlan(profile.plan);
-  if (plan.id === "free") {
-    return NextResponse.json(
-      { error: "subscription_required", message: "Choose a plan to start asking." },
-      { status: 403 }
-    );
-  }
+  const tier = PRODUCTS.intelligence.tiers[entitlement.plan_tier];
 
   // ----- Usage limit check -----
   const month = currentMonthKey();
@@ -95,13 +81,13 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   const currentCount = usageRow?.question_count ?? 0;
-  if (currentCount >= plan.questionsPerMonth) {
+  if (currentCount >= tier.questionsPerMonth) {
     return NextResponse.json(
       {
         error: "usage_limit_reached",
-        limit: plan.questionsPerMonth,
+        limit: tier.questionsPerMonth,
         count: currentCount,
-        message: `You've used all ${plan.questionsPerMonth} questions this month. Upgrade for more.`,
+        message: `You've used all ${tier.questionsPerMonth} questions this month. Upgrade for more.`,
       },
       { status: 403 }
     );
@@ -174,7 +160,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       answer: text || "(empty response)",
-      usage: { count: newCount, limit: plan.questionsPerMonth },
+      usage: { count: newCount, limit: tier.questionsPerMonth },
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Anthropic call failed";

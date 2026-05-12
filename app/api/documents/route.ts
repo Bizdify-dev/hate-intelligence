@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getPlan } from "@/lib/plans";
+import { getEntitlement } from "@/lib/access";
+import { PRODUCTS } from "@/lib/products";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,35 +137,33 @@ export async function POST(req: NextRequest) {
   }
 
   // Plan checks
-  const { data: profile } = await r.supabase
-    .from("profiles")
-    .select("plan")
-    .eq("id", r.user.id)
-    .single();
-  const plan = getPlan(profile?.plan);
+  const entitlement = await getEntitlement(r.user.id, "intelligence");
+  const tier = entitlement
+    ? PRODUCTS.intelligence.tiers[entitlement.plan_tier]
+    : null;
 
-  if (content.length > plan.maxCharsPerDocument && plan.maxCharsPerDocument > 0) {
+  if (tier && content.length > tier.maxCharsPerDocument && tier.maxCharsPerDocument > 0) {
     return NextResponse.json(
       {
         error: "char_limit_exceeded",
-        limit: plan.maxCharsPerDocument,
-        message: `Document exceeds your plan's ${plan.maxCharsPerDocument.toLocaleString()}-char limit.`,
+        limit: tier.maxCharsPerDocument,
+        message: `Document exceeds your plan's ${tier.maxCharsPerDocument.toLocaleString()}-char limit.`,
       },
       { status: 403 }
     );
   }
 
-  if (plan.documentLimit > 0) {
+  if (tier && tier.documentLimit > 0) {
     const { count } = await r.supabase
       .from("documents")
       .select("id", { count: "exact", head: true })
       .eq("user_id", r.user.id);
-    if ((count ?? 0) >= plan.documentLimit) {
+    if ((count ?? 0) >= tier.documentLimit) {
       return NextResponse.json(
         {
           error: "document_limit_reached",
-          limit: plan.documentLimit,
-          message: `You've reached your plan's ${plan.documentLimit}-document limit. Upgrade for more.`,
+          limit: tier.documentLimit,
+          message: `You've reached your plan's ${tier.documentLimit}-document limit. Upgrade for more.`,
         },
         { status: 403 }
       );
@@ -190,22 +189,20 @@ export async function PUT(req: NextRequest) {
   const id = body?.id;
   if (!id) return NextResponse.json({ error: "missing_id" }, { status: 400 });
 
-  const { data: profile } = await r.supabase
-    .from("profiles")
-    .select("plan")
-    .eq("id", r.user.id)
-    .single();
-  const plan = getPlan(profile?.plan);
+  const entitlement = await getEntitlement(r.user.id, "intelligence");
+  const tier = entitlement
+    ? PRODUCTS.intelligence.tiers[entitlement.plan_tier]
+    : null;
 
   const patch: { title?: string; content?: string } = {};
   if (typeof body.title === "string") patch.title = body.title.slice(0, 200);
   if (typeof body.content === "string") {
-    if (body.content.length > plan.maxCharsPerDocument && plan.maxCharsPerDocument > 0) {
+    if (tier && body.content.length > tier.maxCharsPerDocument && tier.maxCharsPerDocument > 0) {
       return NextResponse.json(
         {
           error: "char_limit_exceeded",
-          limit: plan.maxCharsPerDocument,
-          message: `Document exceeds your plan's ${plan.maxCharsPerDocument.toLocaleString()}-char limit.`,
+          limit: tier.maxCharsPerDocument,
+          message: `Document exceeds your plan's ${tier.maxCharsPerDocument.toLocaleString()}-char limit.`,
         },
         { status: 403 }
       );

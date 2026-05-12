@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getPlan, currentMonthKey } from "@/lib/plans";
+import { PLANS, currentMonthKey } from "@/lib/plans";
+import { getEntitlement } from "@/lib/access";
+import { PRODUCTS } from "@/lib/products";
 import SettingsClient from "./SettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -13,10 +15,10 @@ export default async function SettingsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: usageRow }] = await Promise.all([
+  const [{ data: profile }, { data: usageRow }, entitlement] = await Promise.all([
     supabase
       .from("profiles")
-      .select("plan, subscription_status, email, stripe_customer_id")
+      .select("email, stripe_customer_id")
       .eq("id", user.id)
       .single(),
     supabase
@@ -26,11 +28,17 @@ export default async function SettingsPage() {
       .eq("month", currentMonthKey())
       .eq("product", "intelligence")
       .maybeSingle(),
+    getEntitlement(user.id, "intelligence"),
   ]);
 
-  const plan = getPlan(profile?.plan);
+  const tier = entitlement
+    ? PRODUCTS.intelligence.tiers[entitlement.plan_tier]
+    : null;
+  const planName = entitlement ? PLANS[entitlement.plan_tier].name : "Free";
+  const planPrice = entitlement ? PLANS[entitlement.plan_tier].priceMonthly : 0;
+  const questionsLimit = tier?.questionsPerMonth ?? 0;
   const usage = usageRow?.question_count ?? 0;
-  const status = profile?.subscription_status ?? "inactive";
+  const status = entitlement ? "active" : "inactive";
   const hasCustomer = Boolean(profile?.stripe_customer_id);
 
   return (
@@ -53,17 +61,17 @@ export default async function SettingsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="font-display font-bold text-2xl tracking-tighter">
-                  {plan.name}
+                  {planName}
                 </span>
-                {plan.id !== "free" && (
+                {entitlement && (
                   <span className="font-mono text-xs text-ink-dim">
-                    ${plan.priceMonthly}/month
+                    ${planPrice}/month
                   </span>
                 )}
                 <StatusPill status={status} />
               </div>
             </div>
-            {plan.id === "free" || status !== "active" ? (
+            {!entitlement ? (
               <Link href="/upgrade" className="btn btn-primary">
                 Upgrade
               </Link>
@@ -79,15 +87,15 @@ export default async function SettingsPage() {
                 {usage}
               </span>
               <span className="text-ink-dim font-mono text-sm">
-                / {plan.questionsPerMonth} questions
+                / {questionsLimit} questions
               </span>
             </div>
             <div className="h-1.5 bg-bg-3 rounded-[2px] overflow-hidden">
               <div
                 className="h-full bg-acid transition-all"
                 style={{
-                  width: plan.questionsPerMonth
-                    ? `${Math.min(100, (usage / plan.questionsPerMonth) * 100)}%`
+                  width: questionsLimit
+                    ? `${Math.min(100, (usage / questionsLimit) * 100)}%`
                     : "0%",
                 }}
               />

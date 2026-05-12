@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AppNavbar } from "@/components/Navbar";
+import { getEntitlement } from "@/lib/access";
 
 export default async function DashboardLayout({
   children,
@@ -15,18 +16,21 @@ export default async function DashboardLayout({
 
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("plan, subscription_status, email")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, entitlement] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("email")
+      .eq("id", user.id)
+      .single(),
+    getEntitlement(user.id, "intelligence"),
+  ]);
 
   return (
     <div className="flex flex-col h-screen bg-bg">
       <AppNavbar
         email={profile?.email ?? user.email ?? ""}
-        plan={profile?.plan ?? "free"}
-        subscriptionStatus={profile?.subscription_status ?? "inactive"}
+        plan={entitlement?.plan_tier ?? "free"}
+        subscriptionStatus={entitlement ? "active" : "inactive"}
       />
       <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
         {children}
