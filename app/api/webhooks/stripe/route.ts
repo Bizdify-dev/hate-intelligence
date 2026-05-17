@@ -15,10 +15,16 @@ type Admin = ReturnType<typeof createAdminClient>;
  *
  * Handled events:
  *  - checkout.session.completed       → upsert sub + entitlements
- *  - customer.subscription.created    → upsert sub + entitlements (defense-in-depth)
  *  - customer.subscription.updated    → upsert sub + entitlements (price changes, plan switches)
  *  - customer.subscription.deleted    → mark sub canceled (entitlement rows are kept; gate filters by status)
  *  - invoice.payment_failed           → mark sub past_due
+ *
+ * customer.subscription.created is deliberately NOT handled. It always carries
+ * status "incomplete"; when it raced the "active" .updated event, a late commit
+ * left subscriptions stuck at "incomplete". checkout.session.completed already
+ * covers every (Checkout-initiated) new subscription. An out-of-band sub created
+ * outside Checkout would need .created back — with an event-timestamp ordering
+ * guard, not a bare handler.
  *
  * The webhook does NOT write to profiles. Entitlements live entirely in the
  * subscriptions + entitlements tables. user_id is carried on every subscription
@@ -62,7 +68,6 @@ export async function POST(req: NextRequest) {
         break;
       }
 
-      case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
         await syncSubscription(admin, subscription);
@@ -170,15 +175,13 @@ async function syncSubscription(admin: Admin, subscription: Stripe.Subscription)
 
   if (subErr) throw subErr;
 
-  // Recompute entitlements: drop stale rows, insert the current set.
-  const { error: delErr } = await admin
-    .from("entitlements")
-    .delete()
-    .eq("subscription_id", subRow.id);
-  if (delErr) throw delErr;
-
+  // Recompute entitlements. Upsert (not delete-then-insert) so that two
+  // webhook handlers running concurrently for the same subscription can't
+  // collide on the (subscription_id, product_key) unique constraint.
   const entitlements = parseEntitlements(price.metadata?.entitlements);
   if (entitlements.length === 0) {
+    // Misconfigured price. Leave any existing rows untouched rather than run
+    // a `not in ()` prune; the warning surfaces the bad metadata.
     console.warn(
       `[stripe webhook] price ${price.id} has no valid entitlements metadata; sub ${subscription.id} grants nothing`
     );
@@ -192,8 +195,22 @@ async function syncSubscription(admin: Admin, subscription: Stripe.Subscription)
     plan_tier: e.plan_tier,
   }));
 
-  const { error: insErr } = await admin.from("entitlements").insert(rows);
-  if (insErr) throw insErr;
+  const { error: upsertErr } = await admin
+    .from("entitlements")
+    .upsert(rows, { onConflict: "subscription_id,product_key" });
+  if (upsertErr) throw upsertErr;
+
+  // Prune entitlements no longer granted (e.g. an Everything → single-product
+  // downgrade). Delete-by-exclusion only removes rows we're certain shouldn't
+  // exist, so it stays safe under concurrent handlers — every handler in a
+  // create/activate burst sees the identical entitlements list.
+  const productKeys = entitlements.map((e) => e.product_key);
+  const { error: pruneErr } = await admin
+    .from("entitlements")
+    .delete()
+    .eq("subscription_id", subRow.id)
+    .not("product_key", "in", `(${productKeys.join(",")})`);
+  if (pruneErr) throw pruneErr;
 }
 
 /**
