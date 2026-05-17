@@ -99,6 +99,23 @@ export async function POST(req: NextRequest) {
         break;
     }
   } catch (err: unknown) {
+    // Diagnostic logging — the only place a handler failure is otherwise
+    // visible is the 500 response body Stripe receives. Supabase/PostgREST
+    // errors carry code/constraint/detail that pinpoint constraint violations.
+    console.error(
+      `[stripe webhook] handler failed for ${event.type} (${event.id}):`,
+      err
+    );
+    if (err && typeof err === "object") {
+      const e = err as { code?: unknown; constraint?: unknown; detail?: unknown };
+      if (e.code || e.constraint || e.detail) {
+        console.error("[stripe webhook] error details:", {
+          code: e.code,
+          constraint: e.constraint,
+          detail: e.detail,
+        });
+      }
+    }
     const message = err instanceof Error ? err.message : "Handler error";
     // 500 → Stripe retries with exponential backoff. Preferred over silent failure.
     return NextResponse.json(
